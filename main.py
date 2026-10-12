@@ -515,9 +515,24 @@ class KiraDailyReport(BasePlugin):
                 qq_group_id = parts[2]
             else:
                 qq_group_id = group_id
-            await adapter.send_group_message(qq_group_id, MessageChain([Text(text)]))
+            await self._send_group_msg(adapter, qq_group_id, MessageChain([Text(text)]))
         except Exception as e:
             self._log(f"发送文本到群 {group_id} 失败: {e}")
+
+    async def _send_group_msg(self, adapter, group_id: str, chain):
+        """群发送（双世代，特征识别不绑版本号）。
+        3.0 优先走 IMCapability 能力对象（官方契约路径）；
+        2.x 与 3.0 的 QQ 适配器委托方法回退。"""
+        try:
+            get_cap = getattr(adapter, "get_capability", None)
+            if get_cap is not None:
+                from core.adapter import IMCapability  # 仅 3.0 能力架构存在
+                im = get_cap(IMCapability)
+                if im is not None and hasattr(im, "send_group_message"):
+                    return await im.send_group_message(group_id, chain)
+        except Exception:
+            pass
+        return await adapter.send_group_message(group_id, chain)
 
     async def _publish_notice(self, sid: str, text: str) -> None:
         """publish_notice：构造合成事件进主线路，LLM 接话完成回复（消息合并进会话）。
@@ -1996,11 +2011,11 @@ class KiraDailyReport(BasePlugin):
         else:
             qq_group_id = group_id
         if self.output_format == "image":
-            await adapter.send_group_message(qq_group_id, MessageChain([Image(str(report_path))]))
+            await self._send_group_msg(adapter, qq_group_id, MessageChain([Image(str(report_path))]))
         else:
             text_content = report_path.read_text(encoding="utf-8")
             for chunk in [text_content[i:i+500] for i in range(0, len(text_content), 500)]:
-                await adapter.send_group_message(qq_group_id, MessageChain([Text(chunk)]))
+                await self._send_group_msg(adapter, qq_group_id, MessageChain([Text(chunk)]))
                 await asyncio.sleep(0.5)
 
     # ============================================================
