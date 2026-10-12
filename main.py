@@ -524,9 +524,12 @@ class KiraDailyReport(BasePlugin):
         3.0 优先走 IMCapability 能力对象（官方契约路径）；
         2.x 与 3.0 的 QQ 适配器委托方法回退。"""
         try:
+            from core.adapter import IMCapability  # 仅 3.0 能力架构存在（2.x 无此符号）
+        except ImportError:
+            IMCapability = None
+        try:
             get_cap = getattr(adapter, "get_capability", None)
-            if get_cap is not None:
-                from core.adapter import IMCapability  # 仅 3.0 能力架构存在
+            if IMCapability is not None and get_cap is not None:
                 im = get_cap(IMCapability)
                 if im is not None and hasattr(im, "send_group_message"):
                     return await im.send_group_message(group_id, chain)
